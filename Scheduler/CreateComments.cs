@@ -35,33 +35,35 @@ namespace Sitecore.Feature.Scheduler
 
                         Database master = Sitecore.Configuration.Factory.GetDatabase("master");
                         TemplateItem template = master.GetTemplate("[Comment Data Template ID]"); //TODO: Please enter your comment data template ID
+			string workflowID = template.StandardValues[Sitecore.FieldIDs.DefaultWorkflow];
                         bool IsSuccessfullyAdded = false;
                         foreach (DataRow DBValue in getUnprocessedComments.Tables[0].Rows)
                         {
-
                             Item parent = master.Items[DBValue["BlogID"].ToString()];
-
                             string validItemName = ItemUtil.ProposeValidItemName(DBValue["FullName"].ToString()).Trim();
-                            parent.Add("comments by " + validItemName, template);
-                            Item item = master.GetItem(parent.Paths.Path + "/" + "comments by " + validItemName);
-                            item.Editing.BeginEdit();
+                            Item item = parent.Add("comments by " + validItemName, template);
                             try
                             {
                                 //TODO: Please update field name of comment template
+				item.Editing.BeginEdit();
                                 item.Fields["Name"].Value = DBValue["FullName"].ToString();
                                 item.Fields["Email"].Value = DBValue["Email"].ToString();
                                 item.Fields["Comment"].Value = DBValue["Comment"].ToString();
-                                IsSuccessfullyAdded = true;
+                                 if (!string.IsNullOrEmpty(workflowID))
+                                {
+                                    item.Editing.BeginEdit();
+                                    item.Fields[Sitecore.FieldIDs.Workflow].Value = workflowID;
+                                    IWorkflow wf = master.WorkflowProvider.GetWorkflow(workflowID);
+                                    wf.Start(item);
+                                }
+                                item.Editing.EndEdit();
+				IsSuccessfullyAdded = true;
                             }
                             catch (Exception ex)
                             {
                                 IsSuccessfullyAdded = false;
                                 Sitecore.Diagnostics.Log.Info("Comment Scheduler: Error in adding comment item under blog item " + ex.Message, this);
                                 break;
-                            }
-                            finally
-                            {
-                                item.Editing.EndEdit();
                             }
                         }
                         if (IsSuccessfullyAdded == true)
